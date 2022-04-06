@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from .res50 import *
-from.vgg19 import * 
+from.vgg19 import *
+from .i3d import *
 import torch 
 
 def freeze_bn(net):
@@ -14,6 +15,11 @@ def release_bn(net):
             for i in module.parameters():
                 i.requires_grad = True
 
+def purge_classifier(state):
+    del state["logits.conv3d.weight"]
+    del state["logits.conv3d.bias"]
+    return state
+
 def init_model(cfg):
     num_classes =cfg.num_classes
     if cfg.extra:
@@ -22,6 +28,17 @@ def init_model(cfg):
         model = Res50(num_classes, bottleneck=cfg.bottleneck, extra=cfg.extra).cuda()
     elif cfg.model =='vgg19':
         model =VGG19(num_classes, bottleneck=cfg.bottleneck, extra=cfg.extra).cuda()
+    elif cfg.model =='i3d':
+        model = InceptionI3d(in_channels=3)
+
+        if cfg.backbone_pretrain == "kinetics":
+            model.load_state_dict(
+                purge_classifier(
+                    torch.load(
+                        "../pretrained_models/i3d_rgb_imagenet+kinetics.pt"
+                    )
+                )
+            )
 
     if cfg.fix_bn:
         freeze_bn(model)

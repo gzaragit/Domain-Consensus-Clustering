@@ -1,13 +1,15 @@
 from torchvision import models
-import torch.nn as nn 
+import torch.nn as nn
 import torch.nn.functional as F
-import torch 
+import torch
+
 
 class CLS(nn.Module):
     """
     From: https://github.com/thuml/Universal-Domain-Adaptation
     a two-layer MLP for classification
     """
+
     def __init__(self, in_dim, out_dim, bottle_neck_dim=256):
         super(CLS, self).__init__()
         self.bottleneck = nn.Linear(in_dim, bottle_neck_dim)
@@ -17,12 +19,12 @@ class CLS(nn.Module):
 
     def forward(self, x):
         out = [x]
-#        for module in self.main.children():
- #           x = module(x)
-  #          out.append(x)
+        #        for module in self.main.children():
+        #           x = module(x)
+        #          out.append(x)
         x = self.bn(self.bottleneck(x))
         out.append(x)
-        x =self.fc(x)
+        x = self.fc(x)
         out.append(x)
         out.append(F.softmax(x, dim=-1))
         return out
@@ -34,30 +36,31 @@ class Res50(nn.Module):
 
         self.bottleneck = bottleneck
         features = models.resnet50(pretrained=pretrained)
-        self.features =  nn.Sequential(*list(features.children())[:-1])
+        self.features = nn.Sequential(*list(features.children())[:-1])
         if bottleneck:
             self.classifer = CLS(2048, num_classes)
         else:
-            ori_fc  = features.fc
+            ori_fc = features.fc
             self.classifer = nn.Linear(2048, num_classes)
 
+        self.num_classes = num_classes
 
-        self.num_classes = num_classes 
     def forward(self, x):
-        if len(x.shape)>4:
+        if len(x.shape) > 4:
             x = x.squeeze()
-        assert len(x.shape)==4
+        assert len(x.shape) == 4
         feat = self.features(x)
         feat = feat.squeeze()
         if self.bottleneck:
             _, bottleneck, prob, af_softmax = self.classifer(feat)
         else:
-            prob = self.classifer(feat)        
+            prob = self.classifer(feat)
             bottleneck = feat
         return feat, bottleneck, prob, F.softmax(prob, dim=-1)
 
-
     def optim_parameters(self, lr):
-        d = [{'params': self.features.parameters(), 'lr': lr},
-                {'params': self.classifer.parameters(), 'lr':  lr*10}]
+        d = [
+            {"params": self.features.parameters(), "lr": lr},
+            {"params": self.classifer.parameters(), "lr": lr * 10},
+        ]
         return d
